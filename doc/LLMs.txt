@@ -1,0 +1,91 @@
+IPA Upload API - LLM Integration Guide
+
+Purpose
+- Upload .ipa files with token auth.
+- For .ipa uploads, automatically generate iOS OTA manifest + install links.
+
+Base URL
+- Use your deployed API base URL, e.g. https://api.example.com
+- Health endpoint: GET /health
+
+Auth
+- Header required on protected endpoints:
+  Authorization: Bearer <API_TOKEN>
+
+Environment Requirements
+- API_TOKEN: required secret token.
+- PUBLIC_BASE_URL: required for iOS OTA flow; must be HTTPS and reachable by iOS devices.
+- Files are served from /uploads/*.
+
+Endpoints
+
+1) GET /health
+- Auth: none
+- Response 200:
+  { "ok": true }
+
+2) POST /upload
+- Auth: required
+- Content-Type: multipart/form-data
+- Form field: file
+- Allowed extensions: .ipa
+
+Success Responses
+
+A) .ipa upload (201)
+{
+  "message": "Upload successful",
+  "filename": "MyApp-1716976800000.ipa",
+  "originalName": "MyApp.ipa",
+  "size": 12345678,
+  "ipaUrl": "https://downloads.example.com/uploads/MyApp-1716976800000.ipa",
+  "manifestUrl": "https://downloads.example.com/uploads/MyApp-1716976800000-manifest.plist",
+  "installUrl": "itms-services://?action=download-manifest&url=https%3A%2F%2Fdownloads.example.com%2Fuploads%2FMyApp-1716976800000-manifest.plist",
+  "installPageUrl": "https://downloads.example.com/uploads/MyApp-1716976800000-install.html",
+  "bundleIdentifier": "com.example.myapp",
+  "version": "1.2.3",
+  "buildNumber": "42",
+  "title": "My App"
+}
+
+IPA OTA Behavior
+- Server extracts metadata from Payload/*.app/Info.plist:
+  - CFBundleIdentifier
+  - CFBundleVersion
+  - CFBundleShortVersionString
+  - CFBundleDisplayName (fallback CFBundleName)
+- Server generates Apple manifest.plist and stores it in uploads.
+- Server generates iOS install link:
+  itms-services://?action=download-manifest&url=<url-encoded manifest https url>
+- Server also generates a public install HTML page with an "Install App" button.
+
+Error Responses
+- Common shape:
+  { "error": "<message>" }
+
+- 401 Unauthorized:
+  - Missing or invalid bearer token.
+
+- 400 Bad Request examples:
+  - Missing file field (use "file").
+  - Only .ipa files are allowed.
+  - Invalid IPA file: failed to read archive.
+  - Invalid IPA file: Info.plist not found under Payload/*.app/.
+  - Invalid IPA file: Info.plist is empty.
+  - IPA metadata incomplete: ... required.
+  - Generated manifest plist validation failed.
+  - IPA URL must use HTTPS.
+  - Manifest URL must use HTTPS.
+  - Install page URL must use HTTPS.
+
+Agent Usage Pattern
+1) Call POST /upload with bearer token and file.
+2) If response has installPageUrl, present it as primary action for iOS users.
+3) Keep installUrl as fallback deep-link.
+4) On errors, surface server message directly to user.
+5) Do not ask users for bundle identifier/version when uploading IPA; server extracts it.
+
+cURL Example
+curl -X POST https://api.example.com/upload \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@/absolute/path/to/app.ipa"
