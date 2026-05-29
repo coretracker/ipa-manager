@@ -16,6 +16,11 @@ Environment Requirements
 - API_TOKEN: required secret token.
 - PUBLIC_BASE_URL: required for iOS OTA flow; must be HTTPS and reachable by iOS devices.
 - Files are served from /uploads/*.
+- Optional Slack notifications:
+  - SLACK_BOT_TOKEN: Slack Bot token (xoxb-...)
+  - SLACK_CHANNEL_ID: Slack channel id
+  - When both are set, new IPA builds are posted to Slack
+  - If Slack returns an error, upload fails with 502.
 
 Endpoints
 
@@ -65,6 +70,11 @@ Error Responses
 
 - 401 Unauthorized:
   - Missing or invalid bearer token.
+
+- 502 Bad Gateway examples:
+  - Slack notification failed: network error.
+  - Slack notification failed: invalid Slack response.
+  - Slack notification failed: <slack_error>.
 
 - 400 Bad Request examples:
   - Missing file field (use "file").

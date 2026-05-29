@@ -15,6 +15,9 @@ const {
   writeInstallPageToStorage,
   writeManifestToStorage
 } = require('./src/ipa-ota');
+const {
+  postNewBuildToSlack
+} = require('./src/slack');
 
 const app = express();
 const port = Number(process.env.PORT || 0);
@@ -62,16 +65,14 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/upload', auth, upload.single('file'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'Missing file field (use "file").' });
-  }
+app.post('/upload', auth, upload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Missing file field (use "file").' });
+    }
 
-  const baseUrl = resolveBaseUrl(req);
-  const fileUrl = buildPublicFileUrl(baseUrl, req.file.filename);
-  const ext = path.extname(req.file.filename).toLowerCase();
-
-  if (ext === '.ipa') {
+    const baseUrl = resolveBaseUrl(req);
+    const fileUrl = buildPublicFileUrl(baseUrl, req.file.filename);
     const metadata = extractIpaMetadata(req.file.path);
     ensureHttpsUrl(fileUrl, 'IPA');
 
@@ -105,6 +106,16 @@ app.post('/upload', auth, upload.single('file'), (req, res) => {
     const installPageUrl = buildPublicFileUrl(baseUrl, pageFilename);
     ensureHttpsUrl(installPageUrl, 'Install page');
 
+    await postNewBuildToSlack({
+      title: metadata.title,
+      bundleIdentifier: metadata.bundleIdentifier,
+      version: metadata.shortVersion,
+      buildNumber: metadata.bundleVersion,
+      ipaUrl: fileUrl,
+      installPageUrl,
+      manifestUrl
+    });
+
     return res.status(201).json({
       message: 'Upload successful',
       filename: req.file.filename,
@@ -119,15 +130,9 @@ app.post('/upload', auth, upload.single('file'), (req, res) => {
       buildNumber: metadata.bundleVersion,
       title: metadata.title
     });
+  } catch (err) {
+    return next(err);
   }
-
-  res.status(201).json({
-    message: 'Upload successful',
-    filename: req.file.filename,
-    originalName: req.file.originalname,
-    size: req.file.size,
-    url: fileUrl
-  });
 });
 
 app.use((err, _req, res, _next) => {

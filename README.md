@@ -12,6 +12,12 @@ cp .env.example .env
 Set `API_TOKEN` in `.env`.
 Set `PUBLIC_BASE_URL` to an HTTPS URL reachable by iOS devices (for OTA install links).
 
+Optional Slack notifications for new builds:
+- `SLACK_BOT_TOKEN` (Bot User OAuth Token, usually starts with xoxb-)
+- `SLACK_CHANNEL_ID` (target channel id, e.g. C0123456789)
+
+If both are set, every successful IPA upload posts a new-build message to Slack. If Slack posting fails, upload returns an error.
+
 ## Run
 
 ```bash

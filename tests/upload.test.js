@@ -28,6 +28,9 @@ describe('IPA OTA upload flow', () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ipa-test-'));
+    delete process.env.SLACK_BOT_TOKEN;
+    delete process.env.SLACK_CHANNEL_ID;
+    delete global.fetch;
   });
 
   afterEach(() => {
@@ -130,5 +133,54 @@ describe('IPA OTA upload flow', () => {
 
     const encoded = response.body.installUrl.slice(prefix.length);
     expect(decodeURIComponent(encoded)).toBe(response.body.manifestUrl);
+  });
+
+  test('posts to Slack when Slack integration is configured', async () => {
+    process.env.SLACK_BOT_TOKEN = 'xoxb-test-token';
+    process.env.SLACK_CHANNEL_ID = 'C0123456789';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true })
+    });
+
+    const ipaPath = path.join(tmpDir, 'slack.ipa');
+    createValidIpa(ipaPath);
+
+    const response = await request(app)
+      .post('/upload')
+      .set('Authorization', 'Bearer test-token')
+      .attach('file', ipaPath);
+
+    expect(response.status).toBe(201);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://slack.com/api/chat.postMessage',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer xoxb-test-token'
+        })
+      })
+    );
+  });
+
+  test('fails when Slack is configured but Slack API returns an error', async () => {
+    process.env.SLACK_BOT_TOKEN = 'xoxb-test-token';
+    process.env.SLACK_CHANNEL_ID = 'C0123456789';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: false, error: 'channel_not_found' })
+    });
+
+    const ipaPath = path.join(tmpDir, 'slack-error.ipa');
+    createValidIpa(ipaPath);
+
+    const response = await request(app)
+      .post('/upload')
+      .set('Authorization', 'Bearer test-token')
+      .attach('file', ipaPath);
+
+    expect(response.status).toBe(502);
+    expect(response.body.error).toMatch(/Slack notification failed/i);
   });
 });
