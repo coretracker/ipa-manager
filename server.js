@@ -71,6 +71,7 @@ app.post('/upload', auth, upload.single('file'), async (req, res, next) => {
       return res.status(400).json({ error: 'Missing file field (use "file").' });
     }
 
+    const summary = typeof req.body.summary === 'string' ? req.body.summary.trim() : '';
     const baseUrl = resolveBaseUrl(req);
     const fileUrl = buildPublicFileUrl(baseUrl, req.file.filename);
     const metadata = extractIpaMetadata(req.file.path);
@@ -108,6 +109,7 @@ app.post('/upload', auth, upload.single('file'), async (req, res, next) => {
 
     await postNewBuildToSlack({
       title: metadata.title,
+      summary,
       bundleIdentifier: metadata.bundleIdentifier,
       version: metadata.shortVersion,
       buildNumber: metadata.bundleVersion,
@@ -125,6 +127,7 @@ app.post('/upload', auth, upload.single('file'), async (req, res, next) => {
       manifestUrl,
       installUrl,
       installPageUrl,
+      summary,
       bundleIdentifier: metadata.bundleIdentifier,
       version: metadata.shortVersion,
       buildNumber: metadata.bundleVersion,

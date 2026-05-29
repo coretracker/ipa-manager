@@ -38,6 +38,7 @@ By default it uses a random free port (`PORT=0`) and prints the exact URL on sta
 - URL: `/upload`
 - Auth: `Authorization: Bearer <API_TOKEN>`
 - Form field: `file` (`.ipa`)
+- Optional form field: `summary` (string, used for Slack message and response)
 
 Example:
 
@@ -59,6 +60,7 @@ Response example:
   "manifestUrl": "https://downloads.example.com/uploads/app-1716976800000-manifest.plist",
   "installUrl": "itms-services://?action=download-manifest&url=https%3A%2F%2Fdownloads.example.com%2Fuploads%2Fapp-1716976800000-manifest.plist",
   "installPageUrl": "https://downloads.example.com/uploads/app-1716976800000-install.html",
+  "summary": "QA approved build for release candidate",
   "bundleIdentifier": "com.example.app",
   "version": "1.2.3",
   "buildNumber": "42",

@@ -55,6 +55,7 @@ describe('IPA OTA upload flow', () => {
     expect(response.body.version).toBe('1.2.3');
     expect(response.body.buildNumber).toBe('42');
     expect(response.body.title).toBe('My App');
+    expect(response.body.summary).toBe('');
 
     const manifestFilename = decodeURIComponent(response.body.manifestUrl.split('/').pop());
     const manifestPath = path.join(process.cwd(), 'uploads', manifestFilename);
@@ -149,6 +150,7 @@ describe('IPA OTA upload flow', () => {
     const response = await request(app)
       .post('/upload')
       .set('Authorization', 'Bearer test-token')
+      .field('summary', 'QA approved build for release candidate')
       .attach('file', ipaPath);
 
     expect(response.status).toBe(201);
@@ -159,9 +161,11 @@ describe('IPA OTA upload flow', () => {
         method: 'POST',
         headers: expect.objectContaining({
           Authorization: 'Bearer xoxb-test-token'
-        })
+        }),
+        body: expect.stringContaining('Summary: QA approved build for release candidate')
       })
     );
+    expect(response.body.summary).toBe('QA approved build for release candidate');
   });
 
   test('fails when Slack is configured but Slack API returns an error', async () => {

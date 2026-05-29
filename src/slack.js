@@ -10,6 +10,7 @@ function hasSlackConfig() {
 
 async function postNewBuildToSlack({
   title,
+  summary,
   bundleIdentifier,
   version,
   buildNumber,
@@ -23,14 +24,16 @@ async function postNewBuildToSlack({
 
   const token = process.env.SLACK_BOT_TOKEN;
   const channel = process.env.SLACK_CHANNEL_ID;
-  const text = [
+  const textLines = [
     `New iOS build uploaded: ${title}`,
+    summary ? `Summary: ${summary}` : null,
     `Bundle: ${bundleIdentifier}`,
     `Version: ${version} (${buildNumber})`,
     `Install page: ${installPageUrl}`,
     `Manifest: ${manifestUrl}`,
     `IPA: ${ipaUrl}`
-  ].join('\n');
+  ].filter(Boolean);
+  const text = textLines.join('\n');
 
   let response;
   try {
