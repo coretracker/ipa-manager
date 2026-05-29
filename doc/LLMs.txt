@@ -1,8 +1,9 @@
-IPA Upload API - LLM Integration Guide
+IPA/APK Upload API - LLM Integration Guide
 
 Purpose
-- Upload .ipa files with token auth.
+- Upload .ipa or .apk files with token auth.
 - For .ipa uploads, automatically generate iOS OTA manifest + install links.
+- For .apk uploads, generate a public Android install page + direct APK URL.
 
 Base URL
 - Use your deployed API base URL, e.g. https://api.example.com
@@ -14,12 +15,12 @@ Auth
 
 Environment Requirements
 - API_TOKEN: required secret token.
-- PUBLIC_BASE_URL: required for iOS OTA flow; must be HTTPS and reachable by iOS devices.
+- PUBLIC_BASE_URL: required; must be HTTPS and reachable by devices.
 - Files are served from /uploads/*.
 - Optional Slack notifications:
   - SLACK_BOT_TOKEN: Slack Bot token (xoxb-...)
   - SLACK_CHANNEL_ID: Slack channel id
-  - When both are set, new IPA builds are posted to Slack
+  - When both are set, new builds are posted to Slack
   - If Slack returns an error, upload fails with 502.
 
 Endpoints
@@ -34,7 +35,7 @@ Endpoints
 - Content-Type: multipart/form-data
 - Form field: file
 - Optional form field: summary (string)
-- Allowed extensions: .ipa
+- Allowed extensions: .ipa, .apk
 
 Success Responses
 
@@ -48,23 +49,24 @@ A) .ipa upload (201)
   "manifestUrl": "https://downloads.example.com/uploads/MyApp-1716976800000-manifest.plist",
   "installUrl": "itms-services://?action=download-manifest&url=https%3A%2F%2Fdownloads.example.com%2Fuploads%2FMyApp-1716976800000-manifest.plist",
   "installPageUrl": "https://downloads.example.com/uploads/MyApp-1716976800000-install.html",
-  "summary": "QA approved build for release candidate",
+  "summary": "QA approved build",
   "bundleIdentifier": "com.example.myapp",
   "version": "1.2.3",
   "buildNumber": "42",
   "title": "My App"
 }
 
-IPA OTA Behavior
-- Server extracts metadata from Payload/*.app/Info.plist:
-  - CFBundleIdentifier
-  - CFBundleVersion
-  - CFBundleShortVersionString
-  - CFBundleDisplayName (fallback CFBundleName)
-- Server generates Apple manifest.plist and stores it in uploads.
-- Server generates iOS install link:
-  itms-services://?action=download-manifest&url=<url-encoded manifest https url>
-- Server also generates a public install HTML page with an "Install App" button.
+B) .apk upload (201)
+{
+  "message": "Upload successful",
+  "filename": "android-release-1716976800000.apk",
+  "originalName": "android-release.apk",
+  "size": 7654321,
+  "apkUrl": "https://downloads.example.com/uploads/android-release-1716976800000.apk",
+  "installPageUrl": "https://downloads.example.com/uploads/android-release-1716976800000-install.html",
+  "summary": "Android build for testers",
+  "title": "android-release"
+}
 
 Error Responses
 - Common shape:
@@ -80,25 +82,21 @@ Error Responses
 
 - 400 Bad Request examples:
   - Missing file field (use "file").
-  - Only .ipa files are allowed.
+  - Only .ipa and .apk files are allowed.
   - Invalid IPA file: failed to read archive.
   - Invalid IPA file: Info.plist not found under Payload/*.app/.
   - Invalid IPA file: Info.plist is empty.
   - IPA metadata incomplete: ... required.
   - Generated manifest plist validation failed.
   - IPA URL must use HTTPS.
+  - APK URL must use HTTPS.
   - Manifest URL must use HTTPS.
   - Install page URL must use HTTPS.
 
 Agent Usage Pattern
 1) Call POST /upload with bearer token and file.
-2) If response has installPageUrl, present it as primary action for iOS users.
-3) Keep installUrl as fallback deep-link.
-4) On errors, surface server message directly to user.
-5) If available, pass a short `summary` field to annotate the build and Slack notification.
-6) Do not ask users for bundle identifier/version when uploading IPA; server extracts it.
-
-cURL Example
-curl -X POST https://api.example.com/upload \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -F "file=@/absolute/path/to/app.ipa"
+2) Prefer `installPageUrl` as primary user action URL.
+3) For iOS, keep `installUrl` as deep-link fallback.
+4) Pass `summary` when available for audit context.
+5) On errors, surface server message directly to user.
+6) Do not ask users for iOS bundle identifier/version when uploading IPA; server extracts it.

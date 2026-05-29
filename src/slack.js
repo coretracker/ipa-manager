@@ -9,14 +9,14 @@ function hasSlackConfig() {
 }
 
 async function postNewBuildToSlack({
+  platform,
   title,
   summary,
-  bundleIdentifier,
   version,
   buildNumber,
-  ipaUrl,
-  installPageUrl,
-  manifestUrl
+  primaryUrl,
+  artifactUrl,
+  details
 }) {
   if (!hasSlackConfig()) {
     return;
@@ -25,13 +25,12 @@ async function postNewBuildToSlack({
   const token = process.env.SLACK_BOT_TOKEN;
   const channel = process.env.SLACK_CHANNEL_ID;
   const textLines = [
-    `New iOS build uploaded: ${title}`,
+    `New ${platform || 'mobile'} build uploaded: ${title}`,
     summary ? `Summary: ${summary}` : null,
-    `Bundle: ${bundleIdentifier}`,
-    `Version: ${version} (${buildNumber})`,
-    `Install page: ${installPageUrl}`,
-    `Manifest: ${manifestUrl}`,
-    `IPA: ${ipaUrl}`
+    version ? `Version: ${version}${buildNumber ? ` (${buildNumber})` : ''}` : null,
+    ...(Array.isArray(details) ? details : []),
+    primaryUrl ? `Install page: ${primaryUrl}` : null,
+    artifactUrl ? `Artifact: ${artifactUrl}` : null
   ].filter(Boolean);
   const text = textLines.join('\n');
 

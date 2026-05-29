@@ -23,7 +23,7 @@ function createValidIpa(filePath, info = {}) {
   zip.writeZip(filePath);
 }
 
-describe('IPA OTA upload flow', () => {
+describe('Mobile upload flow', () => {
   let tmpDir;
 
   beforeEach(() => {
@@ -186,5 +186,41 @@ describe('IPA OTA upload flow', () => {
 
     expect(response.status).toBe(502);
     expect(response.body.error).toMatch(/Slack notification failed/i);
+  });
+
+  test('valid APK returns public install page and apk url', async () => {
+    const apkPath = path.join(tmpDir, 'android-release.apk');
+    fs.writeFileSync(apkPath, 'dummy-apk-content', 'utf8');
+
+    const response = await request(app)
+      .post('/upload')
+      .set('Authorization', 'Bearer test-token')
+      .field('summary', 'Android build for testers')
+      .attach('file', apkPath);
+
+    expect(response.status).toBe(201);
+    expect(response.body.apkUrl).toMatch(/^https:\/\//);
+    expect(response.body.installPageUrl).toMatch(/^https:\/\//);
+    expect(response.body.summary).toBe('Android build for testers');
+    expect(response.body.title).toBe('android-release');
+
+    const installPageFilename = decodeURIComponent(response.body.installPageUrl.split('/').pop());
+    const installPagePath = path.join(process.cwd(), 'uploads', installPageFilename);
+    const installPage = fs.readFileSync(installPagePath, 'utf8');
+    expect(installPage).toContain('Download APK');
+    expect(installPage).toContain(response.body.apkUrl);
+  });
+
+  test('rejects unsupported extension', async () => {
+    const txtPath = path.join(tmpDir, 'notes.txt');
+    fs.writeFileSync(txtPath, 'not supported', 'utf8');
+
+    const response = await request(app)
+      .post('/upload')
+      .set('Authorization', 'Bearer test-token')
+      .attach('file', txtPath);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/Only \.ipa and \.apk files are allowed/i);
   });
 });

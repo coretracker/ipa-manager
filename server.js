@@ -9,6 +9,7 @@ const {
   buildPublicFileUrl,
   ensureHttpsUrl,
   extractIpaMetadata,
+  generateAndroidInstallPageHtml,
   generateInstallPageHtml,
   generateManifestXml,
   resolveBaseUrl,
@@ -41,10 +42,10 @@ const upload = multer({
   storage,
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    if (ext === '.ipa') {
+    if (ext === '.ipa' || ext === '.apk') {
       return cb(null, true);
     }
-    cb(new Error('Only .ipa files are allowed.'));
+    cb(new Error('Only .ipa and .apk files are allowed.'));
   }
 });
 
@@ -74,65 +75,110 @@ app.post('/upload', auth, upload.single('file'), async (req, res, next) => {
     const summary = typeof req.body.summary === 'string' ? req.body.summary.trim() : '';
     const baseUrl = resolveBaseUrl(req);
     const fileUrl = buildPublicFileUrl(baseUrl, req.file.filename);
-    const metadata = extractIpaMetadata(req.file.path);
-    ensureHttpsUrl(fileUrl, 'IPA');
+    const ext = path.extname(req.file.filename).toLowerCase();
 
-    const manifestXml = generateManifestXml({
-      ipaUrl: fileUrl,
-      metadata
-    });
+    if (ext === '.ipa') {
+      const metadata = extractIpaMetadata(req.file.path);
+      ensureHttpsUrl(fileUrl, 'IPA');
 
-    const { manifestFilename } = writeManifestToStorage({
-      manifestXml,
-      uploadDir,
-      ipaFilename: req.file.filename
-    });
+      const manifestXml = generateManifestXml({
+        ipaUrl: fileUrl,
+        metadata
+      });
 
-    const manifestUrl = buildPublicFileUrl(baseUrl, manifestFilename);
-    ensureHttpsUrl(manifestUrl, 'Manifest');
+      const { manifestFilename } = writeManifestToStorage({
+        manifestXml,
+        uploadDir,
+        ipaFilename: req.file.filename
+      });
 
-    const installUrl = buildInstallUrl(manifestUrl);
-    const installPageHtml = generateInstallPageHtml({
-      title: metadata.title,
-      installUrl,
-      bundleIdentifier: metadata.bundleIdentifier,
-      version: metadata.shortVersion,
-      buildNumber: metadata.bundleVersion
-    });
-    const { pageFilename } = writeInstallPageToStorage({
-      html: installPageHtml,
-      uploadDir,
-      ipaFilename: req.file.filename
-    });
-    const installPageUrl = buildPublicFileUrl(baseUrl, pageFilename);
-    ensureHttpsUrl(installPageUrl, 'Install page');
+      const manifestUrl = buildPublicFileUrl(baseUrl, manifestFilename);
+      ensureHttpsUrl(manifestUrl, 'Manifest');
 
-    await postNewBuildToSlack({
-      title: metadata.title,
-      summary,
-      bundleIdentifier: metadata.bundleIdentifier,
-      version: metadata.shortVersion,
-      buildNumber: metadata.bundleVersion,
-      ipaUrl: fileUrl,
-      installPageUrl,
-      manifestUrl
-    });
+      const installUrl = buildInstallUrl(manifestUrl);
+      const installPageHtml = generateInstallPageHtml({
+        title: metadata.title,
+        installUrl,
+        bundleIdentifier: metadata.bundleIdentifier,
+        version: metadata.shortVersion,
+        buildNumber: metadata.bundleVersion
+      });
+      const { pageFilename } = writeInstallPageToStorage({
+        html: installPageHtml,
+        uploadDir,
+        artifactFilename: req.file.filename
+      });
+      const installPageUrl = buildPublicFileUrl(baseUrl, pageFilename);
+      ensureHttpsUrl(installPageUrl, 'Install page');
 
-    return res.status(201).json({
-      message: 'Upload successful',
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      size: req.file.size,
-      ipaUrl: fileUrl,
-      manifestUrl,
-      installUrl,
-      installPageUrl,
-      summary,
-      bundleIdentifier: metadata.bundleIdentifier,
-      version: metadata.shortVersion,
-      buildNumber: metadata.bundleVersion,
-      title: metadata.title
-    });
+      await postNewBuildToSlack({
+        platform: 'iOS',
+        title: metadata.title,
+        summary,
+        version: metadata.shortVersion,
+        buildNumber: metadata.bundleVersion,
+        primaryUrl: installPageUrl,
+        artifactUrl: fileUrl,
+        details: [
+          `Bundle: ${metadata.bundleIdentifier}`,
+          `Manifest: ${manifestUrl}`
+        ]
+      });
+
+      return res.status(201).json({
+        message: 'Upload successful',
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        ipaUrl: fileUrl,
+        manifestUrl,
+        installUrl,
+        installPageUrl,
+        summary,
+        bundleIdentifier: metadata.bundleIdentifier,
+        version: metadata.shortVersion,
+        buildNumber: metadata.bundleVersion,
+        title: metadata.title
+      });
+    }
+
+    if (ext === '.apk') {
+      ensureHttpsUrl(fileUrl, 'APK');
+      const title = path.basename(req.file.originalname, '.apk');
+      const installPageHtml = generateAndroidInstallPageHtml({
+        title,
+        apkUrl: fileUrl,
+        summary
+      });
+      const { pageFilename } = writeInstallPageToStorage({
+        html: installPageHtml,
+        uploadDir,
+        artifactFilename: req.file.filename
+      });
+      const installPageUrl = buildPublicFileUrl(baseUrl, pageFilename);
+      ensureHttpsUrl(installPageUrl, 'Install page');
+
+      await postNewBuildToSlack({
+        platform: 'Android',
+        title,
+        summary,
+        primaryUrl: installPageUrl,
+        artifactUrl: fileUrl
+      });
+
+      return res.status(201).json({
+        message: 'Upload successful',
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        apkUrl: fileUrl,
+        installPageUrl,
+        summary,
+        title
+      });
+    }
+
+    return res.status(400).json({ error: 'Unsupported file type.' });
   } catch (err) {
     return next(err);
   }

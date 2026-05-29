@@ -184,8 +184,43 @@ function generateInstallPageHtml({ title, installUrl, bundleIdentifier, version,
 </html>`;
 }
 
-function writeInstallPageToStorage({ html, uploadDir, ipaFilename }) {
-  const base = path.basename(ipaFilename, path.extname(ipaFilename));
+function generateAndroidInstallPageHtml({ title, apkUrl, summary }) {
+  const safeSummary = summary ? `<p>${summary}</p>` : '';
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title} Install</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #f7f9ff; color: #1a1f36; }
+    .wrap { min-height: 100vh; padding: max(20px, env(safe-area-inset-top)) 14px max(20px, env(safe-area-inset-bottom)); text-align: center; }
+    .content { width: min(100%, 520px); margin: 0 auto; }
+    h1 { margin: 0 0 10px; font-size: clamp(22px, 5vw, 28px); line-height: 1.2; word-break: break-word; }
+    p { margin: 8px 0; color: #475069; font-size: clamp(14px, 3.2vw, 16px); line-height: 1.45; overflow-wrap: anywhere; }
+    .btn { margin-top: 20px; display: inline-flex; justify-content: center; align-items: center; width: 100%; min-height: 48px; text-decoration: none; background: #0b63f6; color: #fff; padding: 12px 18px; border-radius: 10px; font-weight: 700; font-size: 16px; }
+    @media (max-width: 420px) {
+      .btn { min-height: 50px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="content">
+      <h1>${title}</h1>
+      ${safeSummary}
+      <p>If prompted, allow installs from this browser in Android settings.</p>
+      <a class="btn" href="${apkUrl}">Download APK</a>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function writeInstallPageToStorage({ html, uploadDir, ipaFilename, artifactFilename }) {
+  const sourceFilename = artifactFilename || ipaFilename;
+  const base = path.basename(sourceFilename, path.extname(sourceFilename));
   const pageFilename = `${base}-install.html`;
   const pagePath = path.join(uploadDir, pageFilename);
   fs.writeFileSync(pagePath, html, 'utf8');
@@ -198,6 +233,7 @@ module.exports = {
   createUserError,
   ensureHttpsUrl,
   extractIpaMetadata,
+  generateAndroidInstallPageHtml,
   generateInstallPageHtml,
   generateManifestXml,
   resolveBaseUrl,
